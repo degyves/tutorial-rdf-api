@@ -23,7 +23,7 @@ groovy shell and, each line is a complete sentence:
 
 import org.apache.jena.rdf.model.*
 import org.apache.jena.vocabulary.*
-import org.apache.jena.util.FileManager
+import org.apache.jena.util.*
 
 personURI = "http://somewhere/JohnSmith"
 givenName = "John"
@@ -271,6 +271,267 @@ model.write(System.out, "N-TRIPLE")
 ----
 
 To exit groovy, enter `:quit`.
+
+= SPARQL Tutorial
+
+== Data formats
+
+SPARQL queries RDF data. An RDF graph is a set of triples.
+
+From the javadoc: The language in which to write the model is 
+specified by the lang argument. Predefined values are "RDF/XML", 
+"RDF/XML-ABBREV", "N-TRIPLE", "TURTLE", (and "TTL") and "N3". 
+The default value, represented by null, is "RDF/XML".
+
+----
+model = ModelFactory.createDefaultModel()
+inputFileName = "vc-db-1.rdf";
+infile = FileManager.get().open( inputFileName );
+
+model.read(infile, null)
+model.write(System.out, "TURTLE")
+model.write(System.out, "N-TRIPLE")
+
+model.write(System.out)
+----
+
+== A "hello world" of queries
+
+----
+
+@Grab('org.apache.jena:jena-arq')
+
+import org.apache.jena.query.*
+
+queryStr = "SELECT ?x WHERE { ?x <http://www.w3.org/2001/vcard-rdf/3.0#FN> \"John Smith\" }"
+query = QueryFactory.create(queryStr)
+
+qexec = QueryExecutionFactory.create(query, model)
+results = qexec.execSelect()
+results.each {print it}
+qexec.close()
+
+queryStr2 = """SELECT ?givenName
+WHERE
+  { ?y  <http://www.w3.org/2001/vcard-rdf/3.0#Family>  "Smith" .
+    ?y  <http://www.w3.org/2001/vcard-rdf/3.0#Given>  ?givenName .
+  }"""
+
+query = QueryFactory.create(queryStr2)
+qexec = QueryExecutionFactory.create(query, model)
+results = qexec.execSelect()
+results.each{print it}
+
+query = QueryFactory.create("""
+PREFIX vcard:      <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?givenName
+WHERE
+ { ?y vcard:Family "Smith" .
+   ?y vcard:Given  ?givenName .
+ }
+ """)
+qexec = QueryExecutionFactory.create(query, model)
+qexec.execSelect().each{print it}
+
+qexec = QueryExecutionFactory.create(QueryFactory.create("""
+PREFIX vcard:      <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?y ?givenName
+WHERE
+ { ?y vcard:Family "Smith" .
+   ?y vcard:Given  ?givenName .
+ }
+ """), model)
+qexec.execSelect().each{print it}
+
+----
+
+== Filters
+
+----
+
+def qef (String q, Model m) { QueryExecutionFactory.create(QueryFactory.create(q), m) }
+
+qexec = qef("""PREFIX vcard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?g
+WHERE
+{ ?y vcard:Given ?g .
+  FILTER regex(?g, "r", "i") }""", model)
+
+qexec.execSelect().each{print it}
+
+----
+
+== Testing values
+
+----
+
+model = ModelFactory.createDefaultModel()
+infile = FileManager.get().open( "vc-db-2.rdf" );
+model.read(infile, null)
+
+qexec = qef("""PREFIX info: <http://somewhere/peopleInfo#>
+SELECT ?resource
+WHERE
+  {
+    ?resource info:age ?age .
+    FILTER (?age >= 24)
+  }""", model)
+
+qexec.execSelect().each{print it}
+
+model.write(System.out, "TURTLE")
+----
+
+== OPTIONALs
+
+----
+
+qexec = qef("""PREFIX info:    <http://somewhere/peopleInfo#>
+PREFIX vcard:   <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name ?age
+WHERE
+{
+    ?person vcard:FN  ?name .
+    OPTIONAL { ?person info:age ?age }
+}""",model)
+
+qexec.execSelect().each{print it}
+
+model.write(System.out, "TURTLE")
+
+qexec = qef("""PREFIX info:   <http://somewhere/peopleInfo#>
+PREFIX vcard:  <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name ?age
+WHERE
+{
+    ?person vcard:FN  ?name .
+    ?person info:age ?age .
+}""",model)
+
+qexec.execSelect().each{print it}
+
+
+----
+
+== OPTIONALs vs FILTERs
+
+----
+
+qexec = qef("""PREFIX info:        <http://somewhere/peopleInfo#>
+PREFIX vcard:      <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name ?age
+WHERE
+{
+    ?person vcard:FN  ?name .
+    OPTIONAL { ?person info:age ?age . FILTER ( ?age > 24 ) }
+}""",model)
+
+qexec.execSelect().each{print it}
+
+qexec = qef("""PREFIX info:        <http://somewhere/peopleInfo#>
+PREFIX vcard:      <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name ?age
+WHERE
+{
+    ?person vcard:FN  ?name .
+    OPTIONAL { ?person info:age ?age } .
+    FILTER ( !bound(?age) || ?age > 24 ) 
+}""",model)
+
+qexec.execSelect().each{print it}
+
+----
+
+== OPTIONALs and other dependent queries
+
+----
+
+qexec = qef("""PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name
+WHERE
+{
+  ?x a foaf:Person .
+  OPTIONAL { ?x foaf:name ?name }
+  OPTIONAL { ?x vCard:FN  ?name }
+}""", model)
+
+qexec.execSelect().each{print it}
+
+----
+
+== Alternatives in a Pattern
+
+
+----
+
+hola = {int i, int j -> i +j}
+hola(1,2)
+
+helloWorld = {print "hello world!"}
+helloWorld()
+
+initModel= {inputFilename -> 
+model = ModelFactory.createDefaultModel()
+infile = FileManager.get().open( inputFileName );
+model.read(infile, null)
+return model
+}
+
+model = initModel("vc-db-3.ttl")
+
+model.write(System.out, "TURTLE")
+model.write(System.out, "N-TRIPLE")
+
+qef("""PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name
+WHERE
+{
+   { [] foaf:name ?name } UNION { [] vCard:FN ?name }
+}""", model).execSelect().each{print it}
+
+qef("""PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name
+WHERE
+{
+  [] ?p ?name
+  FILTER ( ?p = foaf:name || ?p = vCard:FN )
+}""", model).execSelect().each{print it}
+
+qef("""PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name1 ?name2
+WHERE
+{
+  { [] foaf:name ?name1 } UNION { [] vCard:FN ?name2 }
+}""", model).execSelect().each{print it}
+
+qef("""PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>
+SELECT ?name1 ?name2
+WHERE
+{
+  ?x a foaf:Person
+  OPTIONAL { ?x  foaf:name  ?name1 }
+  OPTIONAL { ?x  vCard:FN   ?name2 }
+}""",model).execSelect().each{print it}
+
+----
+
+== Datasets
+
+----
+
+
+
+----
+
+= TDB Java API
+
+
+
 
 
 
