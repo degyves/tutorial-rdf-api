@@ -8,7 +8,9 @@ Start groovysh and enter the following to grab `jena-core` from the maven
 repositories:
 
 ----
+
 @Grab('org.apache.jena:jena-core')
+
 ----
 
 
@@ -258,6 +260,7 @@ if(iter2.hasNext()) {
 == More about Literals and Datatypes
 
 ----
+
 r = model.createResource()
 r.addProperty(RDFS.label, model.createLiteral("chat", "en"))
 r.addProperty(RDFS.label, model.createLiteral("chat", "fr"))
@@ -284,6 +287,7 @@ specified by the lang argument. Predefined values are "RDF/XML",
 The default value, represented by null, is "RDF/XML".
 
 ----
+
 model = ModelFactory.createDefaultModel()
 inputFileName = "vc-db-1.rdf";
 infile = FileManager.get().open( inputFileName );
@@ -293,6 +297,7 @@ model.write(System.out, "TURTLE")
 model.write(System.out, "N-TRIPLE")
 
 model.write(System.out)
+
 ----
 
 == A "hello world" of queries
@@ -304,6 +309,7 @@ model.write(System.out)
 import org.apache.jena.query.*
 
 queryStr = "SELECT ?x WHERE { ?x <http://www.w3.org/2001/vcard-rdf/3.0#FN> \"John Smith\" }"
+queryStr
 query = QueryFactory.create(queryStr)
 
 qexec = QueryExecutionFactory.create(query, model)
@@ -465,8 +471,8 @@ qexec.execSelect().each{print it}
 
 ----
 
-hola = {int i, int j -> i +j}
-hola(1,2)
+testClosure = {int i, int j -> i +j}
+testClosure(1,2)
 
 helloWorld = {print "hello world!"}
 helloWorld()
@@ -524,7 +530,32 @@ WHERE
 
 ----
 
+@Grab('org.apache.jena:jena-tdb')
 
+@Grab('org.apache.jena:jena-iri')
+
+@Grab('org.apache.jena:jena-libs')
+
+@Grab('org.apache.jena:jena-osgi')
+
+import org.apache.jena.tdb.*
+import org.apache.jena.tdb.setup.*
+
+a="hola"
+
+ds = TDBFactory.createDataset("/Users/victor/koneksys/jena/tutorial-rdf-api/tdb1/")
+
+ds.close()
+
+ds = TDBFactory.createDataset()
+
+ds.close()
+
+ds = TDBFactory.createDatasetGraph()
+
+ds.close()
+
+TDBFactory.release(ds)
 
 ----
 
