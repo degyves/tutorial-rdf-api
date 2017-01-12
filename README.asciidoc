@@ -477,14 +477,17 @@ testClosure(1,2)
 helloWorld = {print "hello world!"}
 helloWorld()
 
-initModel= {inputFilename -> 
-model = ModelFactory.createDefaultModel()
-infile = FileManager.get().open( inputFileName );
-model.read(infile, null)
-return model
+initModel = {String inputFilename, String base, String lang  -> 
+  model = ModelFactory.createDefaultModel()
+  infile = FileManager.get().open( inputFilename );
+  if(infile == null){
+    throw new IllegalArgumentException("File "+inputFilename+" not found")
+  }
+  model.read(infile, base, lang)
+  return model
 }
 
-model = initModel("vc-db-3.ttl")
+model = initModel("vc-db-1.rdf", null, null)
 
 model.write(System.out, "TURTLE")
 model.write(System.out, "N-TRIPLE")
@@ -530,20 +533,70 @@ WHERE
 
 ----
 
+@Grab('org.apache.jena:jena-core')
 @Grab('org.apache.jena:jena-tdb')
-
 @Grab('org.apache.jena:jena-iri')
-
-@Grab('org.apache.jena:jena-libs')
-
 @Grab('org.apache.jena:jena-osgi')
-
+@Grab('org.apache.jena:jena-arq')
+import org.apache.jena.query.*
+import org.apache.jena.rdf.model.*
+import org.apache.jena.vocabulary.*
+import org.apache.jena.util.*
 import org.apache.jena.tdb.*
 import org.apache.jena.tdb.setup.*
+import org.apache.jena.riot.*
 
-a="hola"
+a=""
 
-ds = TDBFactory.createDataset("/Users/victor/koneksys/jena/tutorial-rdf-api/tdb1/")
+
+----
+
+`Model` has the method `getGraph()`.
+The following apparently loads the default graph:
+
+----
+
+
+dataset1 = TDBFactory.createDataset("/Users/victor/koneksys/jena/tutorial-rdf-api/tdb1/")
+
+defaultModel = RDFDataMgr.loadModel("ds-dft.ttl")
+
+dataset1.setDefaultModel(defaultModel) // error
+
+dataset1.getDefaultModel().write(System.out) // error
+
+dataset1.close()
+
+dataset1 = RDFDataMgr.loadDataset("ds-dft.ttl") 
+
+dataset1.getDefaultModel().write(System.out) // error
+
+----
+
+Now we want to add 2 named graphs:
+
+----
+
+RIOT.init() //not needed
+
+//error
+model1 = initModel("ds-ng-1.ttl", null, "TURTLE")
+
+//error
+model1 = initModel("data.ttl", null, "TTL")
+
+// correct
+model1  = RDFDataMgr.loadModel("ds-ng-1.ttl")
+
+dataset1.addNamedModel("ds-ng-1.ttl", model1)
+
+dataset1.getNamedModel("ds-ng-1.ttl").write(System.out)
+
+model2 = RDFDataMgr.loadModel("ds-ng-2.ttl")
+
+dataset1.addNamedModel("ds-ng-2.ttl", model2)
+
+dataset1.getNamedModel("ds-ng-2.ttl").write(System.out)
 
 ds.close()
 
