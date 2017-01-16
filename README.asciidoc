@@ -1,4 +1,4 @@
-With this command you can see the targes of the source code of jena:
+With this command you can see the targets of the source code of jena:
 
 ----
 mvn help:describe -Dplugin=org.apache.maven.plugins:maven-war-plugin -Ddetail=true
@@ -14,10 +14,10 @@ repositories:
 ----
 
 
-Next, follow the tutorial: https://jena.apache.org/tutorials/rdf_api.html but in
+Next follow the tutorial: https://jena.apache.org/tutorials/rdf_api.html but in
 groovy.
 
-To enter multiple lines, Groovy has to infer if each line is a complete sentence
+To enter multiple lines Groovy has to infer if each line is a complete sentence
 or it is part of a multiline sentence. The following can be pasted to the
 groovy shell and, each line is a complete sentence:
 
@@ -36,7 +36,7 @@ model = ModelFactory.createDefaultModel()
 personURI
 ----
 
-The following paragraph is a multiline sentence. But we are ending each line
+The next paragraph is a multiline sentence. But we are ending each line
 with an open parentheses so Groovy infers that the sentence has not ended:
 
 ----
@@ -51,11 +51,10 @@ johnSmith
 
 ----
 
-If an error occurs on capturing a paragraph, use `:clear` clear the last buffer
-on groovysh and try again. By the way, to exit groovysh use `:quit` and to get
-help on the shell use `:help`. The interactive shell contains autocomplete; use
-the `tab` key to autocomplete a token.
-
+If an error occurs on the input of the a paragraph, using `:clear` clears the 
+last buffer on groovysh and try again. By the way, to exit groovysh use `:quit` 
+and to get help on the shell use `:help`. The interactive shell contains 
+autocomplete; use the `tab` key to autocomplete a token.
 
 resources, literals, arcs, statements, subject, predicate, object
 jonhSmith -> x
@@ -533,11 +532,17 @@ WHERE
 
 ----
 
+@Grab('org.slf4j:slf4j-simple:1.7.5')
+@Grab('org.slf4j:slf4j-api:1.7.5')
+// @GrabResolver(name='jena-tdb', root='file:${user.home}/.m2/repository')
+// @GrabResolver(name='jena-tdb', root='file:/Users/victor/.m2/repository')
+@Grab('org.xeustechnologies:jcl-core:2.8')
 @Grab('org.apache.jena:jena-core')
-@Grab('org.apache.jena:jena-tdb')
+@Grab('org.apache.jena:jena-tdb:3.2.0-SNAPSHOT')
 @Grab('org.apache.jena:jena-iri')
 @Grab('org.apache.jena:jena-osgi')
 @Grab('org.apache.jena:jena-arq')
+import org.xeustechnologies.jcl.*
 import org.apache.jena.query.*
 import org.apache.jena.rdf.model.*
 import org.apache.jena.vocabulary.*
@@ -545,8 +550,10 @@ import org.apache.jena.util.*
 import org.apache.jena.tdb.*
 import org.apache.jena.tdb.setup.*
 import org.apache.jena.riot.*
+import org.apache.jena.graph.*
+import org.apache.jena.shared.*
+go
 
-a=""
 
 
 ----
@@ -556,20 +563,23 @@ The following apparently loads the default graph:
 
 ----
 
+TDBFactory.doHi()
 
 dataset1 = TDBFactory.createDataset("/Users/victor/koneksys/jena/tutorial-rdf-api/tdb1/")
+
+dataset1.close()
 
 defaultModel = RDFDataMgr.loadModel("ds-dft.ttl")
 
 dataset1.setDefaultModel(defaultModel) // error
 
-dataset1.getDefaultModel().write(System.out) // error
+dataset1.getDefaultModel().add(defaultModel) // ok
 
-dataset1.close()
+dataset1.getDefaultModel().write(System.out)
 
-dataset1 = RDFDataMgr.loadDataset("ds-dft.ttl") 
+// dataset1 = RDFDataMgr.loadDataset("ds-dft.ttl") 
 
-dataset1.getDefaultModel().write(System.out) // error
+// dataset1.getDefaultModel().write(System.out) 
 
 ----
 
@@ -577,7 +587,7 @@ Now we want to add 2 named graphs:
 
 ----
 
-RIOT.init() //not needed
+// RIOT.init() //not needed
 
 //error
 model1 = initModel("ds-ng-1.ttl", null, "TURTLE")
@@ -598,21 +608,247 @@ dataset1.addNamedModel("ds-ng-2.ttl", model2)
 
 dataset1.getNamedModel("ds-ng-2.ttl").write(System.out)
 
-ds.close()
+dataset1.close()
 
-ds = TDBFactory.createDataset()
-
-ds.close()
+TDBFactory.release(dataset1) // error - already closed
 
 ds = TDBFactory.createDatasetGraph()
 
 ds.close()
 
-TDBFactory.release(ds)
+----
+
+Recover the connection to the TDB dataset:
+
+----
+dataset1 = TDBFactory.createDataset("/Users/victor/koneksys/jena/tutorial-rdf-api/tdb1/")
+dataset1.getDefaultModel().write(System.out)
+dataset1.getNamedModel("ds-ng-2.ttl").write(System.out)
+----
+
+Accesing the datasets
 
 ----
 
+def qef (String q, Dataset d) { QueryExecutionFactory.create(QueryFactory.create(q), d) }
+
+// query the default graph
+
+qry1 = """PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX : <.>
+SELECT *
+{ ?s ?p ?o }
+"""
+
+qef(qry1,dataset1).execSelect().each{print it}
+
+// query all triples on the default graph and the named graphs
+
+qry2 = """PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX  dc:     <http://purl.org/dc/elements/1.1/>
+PREFIX  :       <.>
+SELECT *
+{
+    { ?s ?p ?o } UNION { GRAPH ?g { ?s ?p ?o } }
+}"""
+
+qef(qry2, dataset1).execSelect().each{print it}
+
+results = ResultSetFactory.makeRewindable( qef(qry2, dataset1).execSelect() )
+ResultSetFormatter.outputAsXML(System.out, results)
+ResultSetFormatter.out(System.out, results)
+ResultSetFormatter.outputAsCSV(System.out, results)
+ResultSetFormatter.outputAsTSV(System.out, results)
+ResultSetFormatter.outputAsJSON(System.out, results)
+
+// query a specific graph @TODO
+
+qry3 = """
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX : <.>
+SELECT ?title
+{ 
+  GRAPH :ds-ng-2.ttl
+  { ?b dc:title ?title }
+}"""
+
+qef(qry3, dataset1).execSelect().each{print it}
+
+qry4 = """
+SELECT ?subject ?predicate ?object ?g
+WHERE { 
+	GRAPH :ds-ng-2.ttl
+      { 
+        ?subject ?predicate ?object
+      }
+}"""
+
+qef(qry4, dataset1).execSelect().each{print "->"+it}
+
+// @TODO 
+
+qry5 = """
+PREFIX dc: <htt.//purl.org/gc/elements/1.1>
+PREFIX : <.>
+SELECT ?subject ?predicate ?object ?g
+FROM :ds-ng-2.ttl
+WHERE { 
+      { 
+        ?subject ?predicate ?object
+      }
+}"""
+
+qef(qry5, dataset1).execSelect().each{print it}
+
+// Querying to find data from graphs that match a pattern @TODO
+
+qry6 = """PREFIX  xsd:    <http://www.w3.org/2001/XMLSchema#>
+PREFIX  dc:     <http://purl.org/dc/elements/1.1/>
+PREFIX  :       <.>
+SELECT ?date ?title
+{
+  ?g dc:date ?date . FILTER (?date > "2005-08-01T00:00:00Z"^^xsd:dateTime )
+  GRAPH ?g
+      { ?b dc:title ?title }
+} """
+
+qef(qry6, dataset1).execSelect().each{print it}
+
+
+// Describing RDF datasets - FROM and FROM NAMED @TODO
+
+qry7 = """PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc:  <http://purl.org/dc/elements/1.1/>
+PREFIX :    <.>
+SELECT *
+FROM       <ds-dft.ttl>
+FROM NAMED <ds-ng-1.ttl>
+FROM NAMED <ds-ng-2.ttl>
+{
+   { ?s ?p ?o } UNION { GRAPH ?g { ?s ?p ?o } }
+} """
+
+qef(qry7, dataset1).execSelect().each{print it}
+
+----
+
+Using the low layer graph
+
+----
+
+// Try to batch up inserts within a single try/finally block
+
+s = NodeFactory.createURI("Rational Software Architect")
+p = Node.createURI("hasAcronym")
+o = NodeFactory.createURI("RSA")?
+triple = new Triple(s, p, o)
+// dm is the DefaultModel
+dm.getGraph().add(triple)
+// try
+dm.enterCriticalSection(Lock.WRITE)
+TDB.sync(dm.getGraph())
+//finally
+dm.leaveCriticalSection()
+
+----
+
+http://trimc-nlp.blogspot.mx/2013/06/introduction-to-jena.html
+
+The Graph Layer is used if you plan to extend suppor of Jena into your product.
+For example, IBM's DB2 RDF store has extended he Jena Graph Layer to provide a
+functional Jena API for DB2.
+
+OTOH the Model Layer is used to leverage Jena support in a business application.
+
+The Ontology Model Layer - This layer is not performant in all but the smallest
+and most trivial datasets.
+
+The Graph Layer is a SPI - is what we extend and implement to achieve a goal
+The Model Layer is an API - is what we call and use to achieve a goal
+
+A triple is created for the default model. A Quad is created for a named model.
+The fourth element is the name of the model. This is W3C RDF standard.
+
 = TDB Java API
+
+To make and install the TDB source:
+
+----
+
+mvn -Dmaven.test.skip=true clean package
+
+----
+
+To instal jcl on the maven local repository:
+
+----
+
+mvn dependency:get \
+    -DrepoUrl=http://mvnrepository.com/artifact \
+        -Dartifact=org.xeustechnologies:jcl-core:LATEST:jar \
+        -Dtransitive=false -U
+
+----
+
+To set a devel-environment for TDB, use the fastest way to re-compile it:
+
+----
+mvn -Dmaven.test.skip=true clean compile
+----
+
+
+Now we must be able to re-load the classes for each recompile:
+(note that slf4j is also loaded)
+
+----
+
+@Grab('org.slf4j:slf4j-simple:1.7.5')
+@Grab('org.slf4j:slf4j-api:1.7.5')
+// @GrabResolver(name='jena-tdb', root='file:${user.home}/.m2/repository')
+// @GrabResolver(name='jena-tdb', root='file:/Users/victor/.m2/repository')
+@Grab('org.xeustechnologies:jcl-core:2.8')
+@Grab('org.apache.jena:jena-core')
+@Grab('org.apache.jena:jena-tdb:3.2.0-SNAPSHOT')
+@Grab('org.apache.jena:jena-iri')
+@Grab('org.apache.jena:jena-osgi')
+@Grab('org.apache.jena:jena-arq')
+import org.xeustechnologies.jcl.*
+import org.apache.jena.query.*
+import org.apache.jena.rdf.model.*
+import org.apache.jena.vocabulary.*
+import org.apache.jena.util.*
+import org.apache.jena.tdb.*
+import org.apache.jena.tdb.setup.*
+import org.apache.jena.riot.*
+import org.apache.jena.graph.*
+import org.apache.jena.shared.*
+go
+
+@Grab('org.xeustechnologies:jcl-core:2.8')
+import org.xeustechnologies.jcl.*
+go
+
+jcl = new JarClassLoader()
+jcl.add(System.getProperty("user.home")
++"/koneksys/jena/jena-src/jena-tdb/target/classes")
+jcl.add(System.getProperty("user.home")
++"/.m2/repository/org/apache/jena/jena-arq/3.2.0-SNAPSHOT/jena-arq-3.2.0-SNAPSHOT.jar")
+jcl.add(System.getProperty("user.home")
++"/.m2/repository/org/apache/jena/jena-core/3.2.0-SNAPSHOT/jena-core-3.2.0-SNAPSHOT.jar")
+jcl.add(System.getProperty("user.home")
++"/.m2/repository/org/apache/jena/jena-base/3.2.0-SNAPSHOT/jena-base-3.2.0-SNAPSHOT.jar")
+
+factory = JclObjectFactory.getInstance()
+tdbFactory = factory.create(jcl, "org.apache.jena.tdb.TDBFactory")
+tdbFactoryClass = jcl.loadClass("org.apache.jena.tdb.TDBFactory")
+tdbFactory.doHi()
+dummyFactoryClass = jcl.loadClass("org.apache.jena.tdb.DummyFactory")
+dummyFactoryClass.doTest()
+
+----
+
+
 
 
 
